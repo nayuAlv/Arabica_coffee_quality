@@ -2,9 +2,9 @@
 
 In this repository I analyse a dataset consisting of Arabica coffee to find out if by only knowing the non-sensory features of a coffee sample one could predict the quality of the coffee beans.
 
-1. An exploratory data analysis, the cleaning and selection of training features can be found in [coffe_data_analysis][]
+1. An exploratory data analysis, the cleaning and selection of training features can be found in [coffe_data_analysis][https://github.com/nayuAlv/Arabica_coffee_quality/blob/main/notebooks/coffee_data_analysis.ipynb]
 
-2. Implementations of various Machine learning models to predict the coffee cup scores, along with performance discussions can be found in [coffee_data_training][]
+2. Implementations of various Machine learning models to predict the coffee cup scores, along with performance discussions can be found in [coffee_data_training][https://github.com/nayuAlv/Arabica_coffee_quality/blob/main/notebooks/coffee_data_train.ipynb]
 
 ## Dataset
 
