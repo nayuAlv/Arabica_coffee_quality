@@ -1,10 +1,15 @@
 import numpy as np
 from sklearn.pipeline import Pipeline
-from sklearn.metrics import f1_score
-from sklearn.model_selection import GridSearchCV, StratifiedKFold, cross_val_predict
+from sklearn.model_selection import GridSearchCV, StratifiedKFold
 from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import precision_recall_curve
 from sklearn.ensemble import RandomForestClassifier
+from xgboost import XGBClassifier
+from sklearn.metrics import precision_score, recall_score, f1_score
+from sklearn.model_selection import train_test_split
+
+
+import matplotlib.pyplot as plt
 
 
 def cup_score_class(score):
@@ -13,24 +18,10 @@ def cup_score_class(score):
     else: 
         return 0
     
-def threshold_tuning(model, X_train, y_train, random_state=1):
-
-    cv_strategy = StratifiedKFold(n_splits=5, shuffle=True, random_state=random_state)
-    y_train_probs = cross_val_predict(model, X_train, y_train, cv=cv_strategy, method="predict_proba")[:, 1]
-    candidates = np.unique(y_train_probs)
-    scores = [f1_score(y_train, (y_train_probs >= t).astype(int), average="macro") for t in candidates]
-
-    optimal_threshold = candidates[int(np.argmax(scores))]
-
-    return optimal_threshold
-
-
-
-
-def train_logistic_regression(preprocessor, X_train, y_train, scoring='average_precision', random_state=1, param_grid={}):
+def train_logistic_regression(preprocessor, X_train, y_train, scoring='average_precision', random_state=1, param_grid=None):
     pipe = Pipeline([
         ("pre", preprocessor),
-        ("clf", LogisticRegression(class_weight='balanced',
+        ("lr", LogisticRegression(class_weight='balanced',
                                    random_state=random_state, max_iter=1000)),
     ])
     grid = GridSearchCV(
@@ -41,14 +32,12 @@ def train_logistic_regression(preprocessor, X_train, y_train, scoring='average_p
         n_jobs=-1
     )
     grid.fit(X_train, y_train)
-    best_model = grid.best_estimator_
+    return grid
 
-    return best_model, grid
-
-def train_random_forest(preprocessor, X_train,y_train, scoring='average_precision', random_state=1,class_weight='balanced', param_grid={}):
+def train_random_forest(preprocessor, X_train,y_train, scoring='average_precision', random_state=1,class_weight='balanced', param_grid=None):
     pipe = Pipeline([
         ("pre", preprocessor),
-        ("clf", RandomForestClassifier(class_weight=class_weight,
+        ("rf", RandomForestClassifier(class_weight=class_weight,
                                        random_state=random_state, n_jobs=-1)),
     ])
     grid_search = GridSearchCV(
@@ -60,6 +49,85 @@ def train_random_forest(preprocessor, X_train,y_train, scoring='average_precisio
         verbose=1,
     )
     grid_search.fit(X_train, y_train)
-    best_model = grid_search.best_estimator_
+    return grid_search
 
-    return best_model, grid_search
+def train_xgb_model(preprocessor, X_train, y_train, scoring='average_precision', 
+                    random_state=1, param_grid=None):
+    
+    optimal_scale = np.sum(y_train == 0) / np.sum(y_train == 1)      
+    
+    pipe = Pipeline([
+    ("pre", preprocessor),
+    ("xgb", XGBClassifier(
+    learning_rate=0.1,
+    scale_pos_weight=optimal_scale,
+    random_state=random_state,
+    n_jobs=-1)),
+    ])
+
+    grid_search_xgb = GridSearchCV(
+    pipe,
+    param_grid=param_grid,
+    cv=StratifiedKFold(n_splits=5, shuffle=True, random_state=random_state),
+    scoring=scoring,
+    n_jobs=-1
+    )
+
+    grid_search_xgb.fit(X_train, y_train)
+
+    return grid_search_xgb
+
+def plot_precision_recall_vs_threshold(y_true, y_probs):
+    precision, recall, thresholds = precision_recall_curve(y_true, y_probs)
+    precision, recall = precision[:-1], recall[:-1]
+    plt.figure(figsize=(5, 3))
+    plt.plot(thresholds, precision, label="Precision")
+    plt.plot(thresholds, recall, label="Recall")
+    plt.xlabel("Threshold")
+    plt.ylabel("Score")
+    plt.title("Precision and Recall vs Threshold")
+    plt.legend()
+    plt.grid(alpha=0.2)
+    plt.show()
+
+def evaluate_at_seed(random_state, X, y, preprocessor):
+    X_train, X_test, y_train, y_test = train_test_split(
+        X, y, train_size=0.8, random_state=random_state, stratify=y
+    )
+
+    lr_grid = train_logistic_regression(
+        preprocessor, X_train, y_train, random_state=random_state,
+        param_grid={'lr__C': [0.001, 0.01,0.05, 0.1, 1]},
+    )
+    rf_grid = train_random_forest(
+        preprocessor, X_train, y_train, random_state=random_state, class_weight='balanced',
+        param_grid={
+            "rf__n_estimators": [100, 200, 300],
+            "rf__max_features": ['sqrt', 0.3, 0.5],
+            "rf__min_samples_leaf": [2, 3, 5, 7],
+            "rf__max_depth": [None, 2, 3],
+        },
+    )
+
+    xgb_grid = train_xgb_model(
+        preprocessor, X_train, y_train,random_state=random_state, 
+        param_grid = {
+    'xgb__n_estimators': [30, 50, 70, 90],
+    'xgb__max_depth': [2, 3, 4, 5, 6],
+    'xgb__min_child_weight': [7, 9, 11, 13, 15]
+    },
+    )
+    
+    rows = []
+    for name, grid in [("Logistic Regression", lr_grid), ("Random Forest", rf_grid), ("XGBoost", xgb_grid)]:
+        model = grid.best_estimator_
+        y_pred = model.predict(X_test)
+        rows.append({
+            "seed": random_state,
+            "model": name,
+            "precision_1": precision_score(y_test, y_pred, pos_label=1),
+            "recall_1": recall_score(y_test, y_pred, pos_label=1),
+            "f1_1": f1_score(y_test, y_pred, pos_label=1),
+            "macro_f1": f1_score(y_test, y_pred, average="macro"),
+        })
+    return rows
