@@ -1,18 +1,19 @@
 # Coffee Quality Prediction
 
-This project tries to predict if a coffee sample belongs to specialty class or below-specialty class employing binary classification models.
+This project employs binary classification models to predict wether a coffee sample belongs to specialty or below-specialty class using only selected non-sensory features.
 
-The total cupping score measures a coffee quality and it is judged on a 100 point scale. Any coffee scoring >= 80 earns the title of "Specialty Coffee". The cupping score is obtained by summing 10 sensory sub-scores: Aroma, Flavor, Aftertaste, Acidity, Body, Balance, Uniformity, Clean.Cup, Sweetness and Cupper Points. Nowadays, knowing the actual cupping score of your coffee is vastly accesible and cheap. However, true access is still unequal, especially for small farmers located in remote regions that some rely on local cooperatives or exporters to grade their coffee. Having an approximation of the true cupping score would allow them to have control over their own product and to define a fair price.
+1. An exploratory data analysis, cleaning and selection of training features can be found in coffee_data_analysis.ipynb.
 
-Therefore, in this ML project, I will try to predict the cupping score considering only non-sensory features. If you want to know the end of the story, I find that a Random Forest classifier worked the best, achivieng the highest precision for the below-specialty class, and the highest overall macro F1 score. However, none of the models surpassed 40% precision on below-specialty coffee, reflecting our class imbalance and the weak correlation between non-sensory features with the total cupping score.
+2. Implementations of three machine learning models to classify coffee as specialty or below-specialty, along with a detailed evaluation and comparison of their performance, can be found in coffee_data_train.ipynb.
+
+
+Coffee quality is traditionally judged by certified professionals on a 100-point scale known as the cupping score, obtained by summing 10 sensory sub-scores: Aroma, Flavor, Aftertaste, Acidity, Body, Balance, Uniformity, Clean.Cup, Sweetness and Cupper Points.  Any coffee scoring >= 80 earns the title of "Specialty Coffee". The coffee dataset also contains non-sensory features such as altitude, moisture, color,and processing type. This project aims to predict whether a coffee reaches the specialty threshold using only these accessible attributes, which do not require a professional cupping.
+
+Since this is a classification problem, the model can be optimized by tuning the decision threshold to balance precision and recall depending on the use case. For example, considering an scenario where the main users are small farmers who rely on local cooperatives or exporters to grade their coffee. Providing them with an automated approximation of their coffee class using data they can measure themselves would give them more control over their product and help them negotiate a fair price. For this case, a model that prioritizes high precision on the below-specialty class would be ideal, labeling coffee as below-specialty only when it is very confident. For this case, I find **Random Forest** to be the most robust and reliable choice compared to Logistic regression and XGBoost. However, since the dataset is skewed (containing only 14% below-specialty coffee samples) and the non-sensory features correlate weakly with the cupping score, all models encounter noticeable noise. Having more below-specialty data would definetiley improve the model's  performance.
 
 ## Dataset
 
-The dataset was extracted from the Coffee Quality Institute in 2018, and can be found [here](https://jldbc.github.io/coffee-quality-database)
-
-1. An exploratory data analysis, the cleaning and selection of training features can be found in the notebook coffe_data_analysis
-
-2. Implementations of various Machine learning models to classify coffee as specialty or below-specialty, along with a detailed evaluation of their performance can be found in the notebook coffee_data_training
+The dataset was extracted from the Coffee Quality Institute in 2018, and can be found [here](github.com/jldbc/coffee-quality-database/tree/master/data)
 
 
 ## Setup

@@ -1,11 +1,11 @@
 import numpy as np
 from sklearn.pipeline import Pipeline
-from sklearn.model_selection import GridSearchCV, StratifiedKFold
+from sklearn.model_selection import GridSearchCV, StratifiedKFold, cross_val_predict
 from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import precision_recall_curve
 from sklearn.ensemble import RandomForestClassifier
 from xgboost import XGBClassifier
-from sklearn.metrics import precision_score, recall_score, f1_score
+from sklearn.metrics import precision_score, recall_score, f1_score, fbeta_score
 from sklearn.model_selection import train_test_split
 
 
@@ -18,6 +18,19 @@ def cup_score_class(score):
     else: 
         return 0
     
+def choose_threshold(estimator, X_train, y_train, beta= 0.5, random_state=1):
+    """
+    Pick the best probability threshold that maximises F-beta, using out-of-fold predictions on the training 
+    set only. For beta < 1 weights, the metric weights precision more than recall.
+    """
+    cv = StratifiedKFold(n_splits=5, shuffle=True, random_state=random_state)
+    oof_probs = cross_val_predict(estimator, X_train, y_train, cv=cv, method="predict_proba")[:,1]
+    thresholds = np.linspace(0.05, 0.95, 181)
+    fbetas = [fbeta_score(y_train, (oof_probs >= t).astype(int), beta= beta, pos_label=1, zero_division=0) for t in thresholds ]
+
+    best_i = int(np.argmax(fbetas)) 
+    return thresholds[best_i], fbetas[best_i]
+
 def train_logistic_regression(preprocessor, X_train, y_train, scoring='average_precision', random_state=1, param_grid=None):
     pipe = Pipeline([
         ("pre", preprocessor),
@@ -90,7 +103,7 @@ def plot_precision_recall_vs_threshold(y_true, y_probs):
     plt.grid(alpha=0.2)
     plt.show()
 
-def evaluate_at_seed(random_state, X, y, preprocessor):
+def evaluate_at_seed(random_state, X, y, preprocessor, beta= 0.5):
     X_train, X_test, y_train, y_test = train_test_split(
         X, y, train_size=0.8, random_state=random_state, stratify=y
     )
@@ -121,13 +134,15 @@ def evaluate_at_seed(random_state, X, y, preprocessor):
     rows = []
     for name, grid in [("Logistic Regression", lr_grid), ("Random Forest", rf_grid), ("XGBoost", xgb_grid)]:
         model = grid.best_estimator_
-        y_pred = model.predict(X_test)
+        t, _ = choose_threshold(model, X_train, y_train, beta=beta, random_state=random_state)
+        y_pred = (model.predict_proba(X_test)[:, 1] >= t).astype(int)
         rows.append({
             "seed": random_state,
             "model": name,
-            "precision_1": precision_score(y_test, y_pred, pos_label=1),
+            "threshold": t,
+            "precision_1": precision_score(y_test, y_pred, pos_label=1, zero_division=0),
             "recall_1": recall_score(y_test, y_pred, pos_label=1),
-            "f1_1": f1_score(y_test, y_pred, pos_label=1),
+            "fbeta_1": fbeta_score(y_test, y_pred, beta=beta, pos_label=1, zero_division=0),
             "macro_f1": f1_score(y_test, y_pred, average="macro"),
         })
     return rows
